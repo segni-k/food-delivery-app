@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use App\Enums\UserRoleEnum;
 
 return new class extends Migration
 {
@@ -13,12 +14,20 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+            $table->uuid('public_id')->unique();
             $table->string('name');
             $table->string('email')->unique();
+            $table->string('phone')->nullable()->index();
+            $table->string('role')->default(UserRoleEnum::CUSTOMER->value)->index();
+            $table->decimal('latitude', 10, 7)->nullable();
+            $table->decimal('longitude', 10, 7)->nullable();
+            $table->boolean('is_available_for_delivery')->default(false)->index();
+            $table->decimal('average_rating', 4, 2)->default(0);
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
