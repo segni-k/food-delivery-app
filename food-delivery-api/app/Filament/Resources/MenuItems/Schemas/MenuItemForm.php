@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\MenuItems\Schemas;
 
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
@@ -18,7 +19,12 @@ class MenuItemForm
             TextInput::make('name')->required(),
             Textarea::make('description'),
             TextInput::make('price')->numeric()->required(),
-            TextInput::make('image_url')->url(),
+            FileUpload::make('image_url')
+                ->label('Food photo')
+                ->image()
+                ->disk('public')
+                ->directory('menu-items')
+                ->columnSpanFull(),
             Toggle::make('is_available')->default(true),
         ]);
     }
