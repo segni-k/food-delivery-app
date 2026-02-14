@@ -46,6 +46,7 @@ class OrderResource extends JsonResource
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
             'review' => new ReviewResource($this->whenLoaded('review')),
             'delivery_assignments' => DeliveryAssignmentResource::collection($this->whenLoaded('deliveryAssignments')),
+            'latest_payment' => new PaymentResource($this->whenLoaded('latestPayment')),
             'created_at' => $this->created_at,
         ];
     }
