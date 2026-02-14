@@ -23,7 +23,7 @@ class OrderController extends Controller
         $user = $request->user();
 
         $orders = Order::query()
-            ->with(['restaurant', 'customer', 'items.menuItem', 'review', 'deliveryAssignments.deliveryPartner'])
+            ->with(['restaurant', 'customer', 'items.menuItem', 'review', 'deliveryAssignments.deliveryPartner', 'latestPayment'])
             ->when($user?->role?->value === 'customer', fn ($query) => $query->where('customer_id', $user->id))
             ->when($user?->role?->value === 'restaurant_owner', function ($query) use ($user): void {
                 $restaurantIds = Restaurant::query()->where('owner_id', $user->id)->pluck('id');
@@ -49,7 +49,7 @@ class OrderController extends Controller
     {
         $this->authorize('view', $order);
 
-        return $this->successResponse('Order fetched successfully.', new OrderResource($order->load(['restaurant', 'customer', 'items.menuItem', 'review', 'deliveryAssignments.deliveryPartner'])));
+        return $this->successResponse('Order fetched successfully.', new OrderResource($order->load(['restaurant', 'customer', 'items.menuItem', 'review', 'deliveryAssignments.deliveryPartner', 'latestPayment'])));
     }
 
     public function updateStatus(UpdateOrderStatusRequest $request, Order $order)
@@ -58,6 +58,6 @@ class OrderController extends Controller
 
         $updated = $this->orderService->updateStatus($order, OrderStatusEnum::from($request->validated('status')));
 
-        return $this->successResponse('Order status updated.', new OrderResource($updated->load(['restaurant', 'customer', 'items.menuItem', 'review', 'deliveryAssignments.deliveryPartner'])));
+        return $this->successResponse('Order status updated.', new OrderResource($updated->load(['restaurant', 'customer', 'items.menuItem', 'review', 'deliveryAssignments.deliveryPartner', 'latestPayment'])));
     }
 }

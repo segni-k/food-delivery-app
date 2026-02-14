@@ -19,6 +19,7 @@ class PaymentController extends Controller
     public function createIntent(CreatePaymentIntentRequest $request)
     {
         $orderId = $request->validated('order_id');
+        $returnOrigin = $request->validated('return_origin');
         $order = Order::query()
             ->with('customer')
             ->where('public_id', $orderId)
@@ -26,7 +27,7 @@ class PaymentController extends Controller
             ->firstOrFail();
         $this->authorize('view', $order);
 
-        $payment = $this->paymentService->createIntent($order);
+        $payment = $this->paymentService->createIntent($order, is_string($returnOrigin) ? $returnOrigin : null);
 
         return $this->successResponse('Payment intent created.', new PaymentResource($payment));
     }
