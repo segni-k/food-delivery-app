@@ -79,6 +79,16 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasMany(DeliveryAssignment::class, 'delivery_partner_id');
     }
 
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(UserAddress::class);
+    }
+
+    public function paymentCards(): HasMany
+    {
+        return $this->hasMany(PaymentCard::class);
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === UserRoleEnum::ADMIN;
