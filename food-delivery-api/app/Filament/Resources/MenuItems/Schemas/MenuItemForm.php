@@ -24,6 +24,7 @@ class MenuItemForm
                 ->image()
                 ->disk('public')
                 ->directory('menu-items')
+                ->fetchFileInformation(false)
                 ->columnSpanFull(),
             Toggle::make('is_available')->default(true),
         ]);
