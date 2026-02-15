@@ -5,7 +5,6 @@ namespace App\Http\Resources;
 use App\Services\GeoLocationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 class RestaurantResource extends JsonResource
 {
@@ -36,7 +35,7 @@ class RestaurantResource extends JsonResource
             'hero_image_url' => $this->normalizeImageUrl($this->banner_image_url)
                 ?: $this->normalizeImageUrl($this->image_url)
                 ?: $this->normalizeImageUrl($this->featuredMenuItem?->image_url),
-            'owner' => new UserResource($this->whenLoaded('owner')),
+            'owner' => UserResource::make($this->whenLoaded('owner')),
             'menu_categories' => MenuCategoryResource::collection($this->whenLoaded('menuCategories')),
             'menu_items' => MenuItemResource::collection($this->whenLoaded('menuItems')),
             'created_at' => $this->created_at,
@@ -53,6 +52,8 @@ class RestaurantResource extends JsonResource
             return $value;
         }
 
-        return Storage::disk('public')->url($value);
+        $publicDiskUrl = rtrim((string) config('filesystems.disks.public.url', '/storage'), '/');
+
+        return $publicDiskUrl.'/'.ltrim($value, '/');
     }
 }

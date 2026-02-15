@@ -41,12 +41,12 @@ class OrderResource extends JsonResource
                 $timeline,
                 array_keys($timeline),
             ),
-            'restaurant' => new RestaurantResource($this->whenLoaded('restaurant')),
-            'customer' => new UserResource($this->whenLoaded('customer')),
+            'restaurant' => RestaurantResource::make($this->whenLoaded('restaurant')),
+            'customer' => UserResource::make($this->whenLoaded('customer')),
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
-            'review' => new ReviewResource($this->whenLoaded('review')),
+            'review' => ReviewResource::make($this->whenLoaded('review')),
             'delivery_assignments' => DeliveryAssignmentResource::collection($this->whenLoaded('deliveryAssignments')),
-            'latest_payment' => new PaymentResource($this->whenLoaded('latestPayment')),
+            'latest_payment' => PaymentResource::make($this->whenLoaded('latestPayment')),
             'created_at' => $this->created_at,
         ];
     }
