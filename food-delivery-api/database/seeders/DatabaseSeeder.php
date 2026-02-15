@@ -15,7 +15,6 @@ use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
@@ -141,20 +140,6 @@ class DatabaseSeeder extends Seeder
                 'restaurant_rating' => fake()->numberBetween(4, 5),
                 'delivery_rating' => fake()->numberBetween(4, 5),
                 'comment' => fake()->sentence(),
-            ]);
-        });
-
-        // Ensure media URLs are unique and image-direct across restaurants and menu items.
-        Restaurant::query()->get()->each(function (Restaurant $restaurant): void {
-            $restaurant->update([
-                'image_url' => 'https://picsum.photos/seed/harereats-restaurant-' . Str::uuid() . '/1600/1000',
-                'banner_image_url' => 'https://picsum.photos/seed/harereats-banner-' . Str::uuid() . '/1800/900',
-            ]);
-        });
-
-        MenuItem::query()->get()->each(function (MenuItem $item): void {
-            $item->update([
-                'image_url' => 'https://picsum.photos/seed/harereats-food-' . Str::uuid() . '/1200/900',
             ]);
         });
 
