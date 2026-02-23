@@ -43,7 +43,12 @@ class OrderFeatureTest extends TestCase
             ],
         ]);
 
-        $response->assertCreated()->assertJsonPath('success', true);
+        $response
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.is_paid', false)
+            ->assertJsonPath('data.payment_status', 'not_paid')
+            ->assertJsonPath('data.payment_status_label', 'Not paid');
         $this->assertDatabaseCount('orders', 1);
     }
 }

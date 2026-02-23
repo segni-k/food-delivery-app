@@ -9,6 +9,10 @@ class OrderResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $latestPayment = $this->relationLoaded('latestPayment') ? $this->latestPayment : null;
+        $paymentState = $latestPayment?->status?->value;
+        $isPaid = $paymentState === 'paid';
+
         $timeline = [
             'pending',
             'accepted',
@@ -47,6 +51,10 @@ class OrderResource extends JsonResource
             'review' => ReviewResource::make($this->whenLoaded('review')),
             'delivery_assignments' => DeliveryAssignmentResource::collection($this->whenLoaded('deliveryAssignments')),
             'latest_payment' => PaymentResource::make($this->whenLoaded('latestPayment')),
+            'payment_state' => $paymentState,
+            'payment_status' => $isPaid ? 'paid' : 'not_paid',
+            'payment_status_label' => $isPaid ? 'Paid' : 'Not paid',
+            'is_paid' => $isPaid,
             'created_at' => $this->created_at,
         ];
     }

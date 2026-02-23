@@ -134,6 +134,9 @@ const OrderConfirmationPage = () => {
             <p className="text-xs font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-300">Order ID</p>
             <p className="mt-1 text-xl font-black">{order.id}</p>
             <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-300">Status: {order.status}</p>
+            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
+              Payment: {order.payment_status_label || (order.is_paid ? 'Paid' : 'Not paid')}
+            </p>
             <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">Delivery to: {order.delivery_address}</p>
             <p className="mt-4 text-lg font-bold">Total: {formatCurrency(order.total_amount)}</p>
           </div>

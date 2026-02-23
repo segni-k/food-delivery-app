@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Services\Contracts\PaymentGatewayInterface;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 class PaymentService
@@ -23,7 +24,7 @@ class PaymentService
             $payment = Payment::query()->create([
                 'order_id' => $order->id,
                 'gateway' => 'chapa',
-                'gateway_transaction_ref' => 'FD-' . Str::upper(Str::random(20)),
+                'gateway_transaction_ref' => $this->generateTransactionReference(),
                 'amount' => $order->total_amount,
                 'currency' => 'ETB',
                 'status' => PaymentStatusEnum::PENDING,
@@ -45,18 +46,20 @@ class PaymentService
 
         try {
             $frontendBaseUrl = $this->resolveFrontendBaseUrl($returnOrigin);
-            $intent = $this->gateway->createIntent([
-                'amount' => $payment->amount,
-                'currency' => $payment->currency,
-                'email' => $customerEmail,
-                'first_name' => $firstName,
-                'tx_ref' => $payment->gateway_transaction_ref,
-                'callback_url' => config('app.url') . '/api/v1/payments/webhook/chapa',
-                'return_url' => $frontendBaseUrl . '/orders/' . $order->public_id . '/confirmation?from=chapa',
-                'customization' => [
-                    'title' => 'HarerEats Order',
-                ],
-            ]);
+            $intent = $this->createGatewayIntentWithTxRefRetry(
+                $payment,
+                [
+                    'amount' => $payment->amount,
+                    'currency' => $payment->currency,
+                    'email' => $customerEmail,
+                    'first_name' => $firstName,
+                    'callback_url' => config('app.url') . '/api/v1/payments/webhook/chapa',
+                    'return_url' => $frontendBaseUrl . '/orders/' . $order->public_id . '/confirmation?from=chapa',
+                    'customization' => [
+                        'title' => 'HarerEats Order',
+                    ],
+                ]
+            );
         } catch (Throwable $exception) {
             $message = trim((string) $exception->getMessage());
             abort(
@@ -73,6 +76,58 @@ class PaymentService
         ]);
 
         return $payment->refresh();
+    }
+
+    private function createGatewayIntentWithTxRefRetry(Payment $payment, array $basePayload): array
+    {
+        $maxAttempts = 3;
+        $lastException = null;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                return $this->gateway->createIntent([
+                    ...$basePayload,
+                    'tx_ref' => $payment->gateway_transaction_ref,
+                ]);
+            } catch (Throwable $exception) {
+                $lastException = $exception;
+
+                if ($attempt < $maxAttempts && $this->isTxRefAlreadyUsedError($exception)) {
+                    $payment->update([
+                        'gateway_transaction_ref' => $this->generateTransactionReference(),
+                    ]);
+                    $payment->refresh();
+                    continue;
+                }
+
+                throw $exception;
+            }
+        }
+
+        throw $lastException instanceof Throwable
+            ? $lastException
+            : new RuntimeException('Unable to initialize payment right now. Please try again.');
+    }
+
+    private function isTxRefAlreadyUsedError(Throwable $exception): bool
+    {
+        $message = Str::lower(trim((string) $exception->getMessage()));
+        if ($message === '') {
+            return false;
+        }
+
+        return Str::contains($message, [
+            'transaction reference has been used before',
+            'tx_ref has been used',
+            'reference has been used',
+            'duplicate tx_ref',
+            'duplicate reference',
+        ]);
+    }
+
+    private function generateTransactionReference(): string
+    {
+        return 'FD-' . Str::upper(Str::random(20));
     }
 
     private function resolveExistingPayment(Order $order): ?Payment

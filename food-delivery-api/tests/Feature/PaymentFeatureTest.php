@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Contracts\PaymentGatewayInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use RuntimeException;
 use Tests\TestCase;
 
 class PaymentFeatureTest extends TestCase
@@ -84,6 +85,72 @@ class PaymentFeatureTest extends TestCase
         $second->assertOk()->assertJsonPath('success', true);
         $this->assertDatabaseCount('payments', 1);
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    }
+
+    public function test_payment_intent_retries_with_new_transaction_reference_when_gateway_rejects_reused_reference(): void
+    {
+        $tracker = new class
+        {
+            public int $attempts = 0;
+            public array $refs = [];
+        };
+
+        $this->app->bind(PaymentGatewayInterface::class, fn () => new class($tracker) implements PaymentGatewayInterface {
+            public function __construct(private readonly object $tracker)
+            {
+            }
+
+            public function createIntent(array $payload): array
+            {
+                $this->tracker->attempts++;
+                $this->tracker->refs[] = (string) $payload['tx_ref'];
+
+                if ($this->tracker->attempts === 1) {
+                    throw new RuntimeException('Transaction reference has been used before');
+                }
+
+                return [
+                    'tx_ref' => $payload['tx_ref'],
+                    'checkout_url' => 'https://checkout.test/' . $payload['tx_ref'],
+                    'raw' => [
+                        'status' => 'success',
+                        'data' => [
+                            'checkout_url' => 'https://checkout.test/' . $payload['tx_ref'],
+                        ],
+                    ],
+                ];
+            }
+
+            public function verify(string $transactionRef): array
+            {
+                return [
+                    'status' => 'success',
+                    'raw' => [
+                        'status' => 'success',
+                        'data' => [
+                            'status' => 'success',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $customer = User::factory()->create(['role' => UserRoleEnum::CUSTOMER]);
+        $order = Order::factory()->create(['customer_id' => $customer->id]);
+
+        Sanctum::actingAs($customer);
+
+        $response = $this->postJson('/api/v1/payments/intents', [
+            'order_id' => $order->public_id,
+        ]);
+
+        $response->assertOk()->assertJsonPath('success', true);
+        $this->assertSame(2, $tracker->attempts);
+        $this->assertCount(2, $tracker->refs);
+        $this->assertNotSame($tracker->refs[0], $tracker->refs[1]);
+
+        $payment = Payment::query()->firstOrFail();
+        $this->assertSame($tracker->refs[1], $payment->gateway_transaction_ref);
     }
 
     public function test_chapa_webhook_accepts_nested_tx_ref_with_valid_signature(): void

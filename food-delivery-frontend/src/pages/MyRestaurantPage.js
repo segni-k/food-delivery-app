@@ -553,9 +553,14 @@ const MyRestaurantPage = () => {
                       <p className="font-semibold">Order #{order.id}</p>
                       <p className="text-xs text-neutral-500 dark:text-neutral-400">{order.delivery_address}</p>
                     </div>
-                    <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold uppercase text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
-                      {order.status}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold uppercase text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
+                        {order.status}
+                      </span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${order.is_paid ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200'}`}>
+                        {order.payment_status_label || (order.is_paid ? 'Paid' : 'Not paid')}
+                      </span>
+                    </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {['accepted', 'preparing', 'ready'].map((status) => (

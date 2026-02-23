@@ -12,10 +12,10 @@ const statusThemeMap = {
 };
 
 const statusMessage = {
-  paid: 'Payment successful.',
-  failed: 'Payment failed. Please retry.',
-  refunded: 'Payment refunded.',
-  pending: 'Payment pending confirmation.',
+  paid: 'Paid.',
+  failed: 'Not paid. Payment failed. Please retry.',
+  refunded: 'Not paid. Payment was refunded.',
+  pending: 'Not paid yet.',
 };
 
 const getPaymentSyncKey = (payment) =>
@@ -44,6 +44,7 @@ const ChapaPaymentIntegration = ({
 
   const payment = localPayment || getOrderPayment(orderId);
   const currentStatus = payment?.status || 'pending';
+  const isPaid = currentStatus === 'paid';
   const themeClass = statusThemeMap[currentStatus] || statusThemeMap.pending;
   const notificationText = paymentNotification?.message || statusMessage[currentStatus] || 'Payment state updated.';
 
@@ -153,12 +154,15 @@ const ChapaPaymentIntegration = ({
     <section className="space-y-3 rounded-2xl border border-neutral-200 bg-white/95 p-4 dark:border-neutral-700 dark:bg-neutral-900/95">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-bold">Chapa payment</h3>
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${themeClass}`}>{readableStatus}</span>
+        <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${themeClass}`}>
+          {isPaid ? 'Paid' : 'Not paid'}
+        </span>
       </div>
 
       {payment?.gateway_transaction_ref ? (
         <p className="text-xs text-neutral-500 dark:text-neutral-400">Transaction ref: {payment.gateway_transaction_ref}</p>
       ) : null}
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">Gateway state: {readableStatus}</p>
       <p className="text-xs text-neutral-500 dark:text-neutral-400">Confirmation mode: {connectionMode}</p>
 
       <p className={`rounded-xl px-3 py-2 text-sm ${themeClass}`}>{notificationText}</p>
@@ -170,15 +174,15 @@ const ChapaPaymentIntegration = ({
         <button
           type="button"
           onClick={initializePayment}
-          disabled={isInitializing}
+          disabled={isInitializing || isPaid}
           className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isInitializing ? 'Initializing...' : payment ? 'Re-init payment' : 'Initialize payment'}
+          {isInitializing ? 'Initializing...' : isPaid ? 'Already paid' : payment ? 'Re-init payment' : 'Initialize payment'}
         </button>
         <button
           type="button"
           onClick={openCheckout}
-          disabled={!payment?.checkout_url}
+          disabled={!payment?.checkout_url || isPaid}
           className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
         >
           Open checkout
@@ -186,7 +190,7 @@ const ChapaPaymentIntegration = ({
         <button
           type="button"
           onClick={verifyPayment}
-          disabled={!payment?.id || isVerifying}
+          disabled={!payment?.id || isVerifying || isPaid}
           className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
         >
           {isVerifying ? 'Checking...' : 'Check status'}

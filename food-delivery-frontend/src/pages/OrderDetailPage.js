@@ -97,11 +97,14 @@ const OrderDetailPage = () => {
                 <span>{formatCurrency(order.total_amount)}</span>
               </div>
             </div>
+            <p className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold ${order.is_paid ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'}`}>
+              Payment status: {order.payment_status_label || (order.is_paid ? 'Paid' : 'Not paid')}
+            </p>
             <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-300">Address: {order.delivery_address}</p>
             <div className="mt-4">
               <ChapaPaymentIntegration
                 orderId={order.id}
-                initialPayment={cachedPayment}
+                initialPayment={cachedPayment || order.latest_payment || null}
                 pollingEnabled
                 pollingIntervalMs={7000}
               />
