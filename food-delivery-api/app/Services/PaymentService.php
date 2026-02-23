@@ -18,14 +18,21 @@ class PaymentService
 
     public function createIntent(Order $order, ?string $returnOrigin = null): Payment
     {
-        $payment = Payment::query()->create([
-            'order_id' => $order->id,
-            'gateway' => 'chapa',
-            'gateway_transaction_ref' => 'FD-' . Str::upper(Str::random(20)),
-            'amount' => $order->total_amount,
-            'currency' => 'ETB',
-            'status' => PaymentStatusEnum::PENDING,
-        ]);
+        $payment = $this->resolveExistingPayment($order);
+        if (! $payment) {
+            $payment = Payment::query()->create([
+                'order_id' => $order->id,
+                'gateway' => 'chapa',
+                'gateway_transaction_ref' => 'FD-' . Str::upper(Str::random(20)),
+                'amount' => $order->total_amount,
+                'currency' => 'ETB',
+                'status' => PaymentStatusEnum::PENDING,
+            ]);
+        }
+
+        if ($payment->status === PaymentStatusEnum::PAID || $this->hasCheckoutUrl($payment)) {
+            return $payment->refresh();
+        }
 
         $customerEmail = (string) ($order->customer->email ?? '');
         if (! filter_var($customerEmail, FILTER_VALIDATE_EMAIL) || Str::endsWith(Str::lower($customerEmail), '@example.com')) {
@@ -66,6 +73,35 @@ class PaymentService
         ]);
 
         return $payment->refresh();
+    }
+
+    private function resolveExistingPayment(Order $order): ?Payment
+    {
+        $latest = Payment::query()
+            ->where('order_id', $order->id)
+            ->latest()
+            ->first();
+
+        if (! $latest) {
+            return null;
+        }
+
+        if ($latest->status === PaymentStatusEnum::PAID) {
+            return $latest;
+        }
+
+        if ($latest->status === PaymentStatusEnum::PENDING) {
+            return $latest;
+        }
+
+        return null;
+    }
+
+    private function hasCheckoutUrl(Payment $payment): bool
+    {
+        $checkoutUrl = data_get($payment->gateway_payload, 'data.checkout_url');
+
+        return is_string($checkoutUrl) && trim($checkoutUrl) !== '';
     }
 
     private function resolveFrontendBaseUrl(?string $returnOrigin): string

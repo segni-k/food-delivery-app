@@ -90,7 +90,7 @@ const OrderConfirmationPage = () => {
     return () => {
       isActive = false;
     };
-  }, [id, location.state?.order, setCurrentOrder]);
+  }, [id, location.state?.order, setCurrentOrder, setOrderPayment]);
 
   useEffect(() => {
     if (!isChapaReturn || didAutoVerifyRef.current || !initialPayment?.id) {
@@ -164,4 +164,3 @@ const OrderConfirmationPage = () => {
 };
 
 export default OrderConfirmationPage;
-

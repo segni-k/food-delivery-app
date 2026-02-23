@@ -29,4 +29,16 @@ class AuthFeatureTest extends TestCase
             'data' => ['token'],
         ]);
     }
+
+    public function test_user_can_request_password_reset_link(): void
+    {
+        $response = $this->postJson('/api/v1/auth/forgot-password', [
+            'email' => 'someone@example.com',
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'If the email exists, a password reset link has been sent.');
+    }
 }

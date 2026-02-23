@@ -20,7 +20,6 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use App\Listeners\AssignDeliveryPartnerListener;
-use App\Listeners\ProcessPaymentListener;
 use App\Listeners\SendOrderNotificationListener;
 use App\Listeners\UpdateAnalyticsListener;
 
@@ -47,7 +46,6 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(OrderCreated::class, SendOrderNotificationListener::class);
         Event::listen(OrderCreated::class, AssignDeliveryPartnerListener::class);
-        Event::listen(OrderCreated::class, ProcessPaymentListener::class);
         Event::listen(OrderStatusUpdated::class, UpdateAnalyticsListener::class);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\UserRoleEnum;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 
 class AuthService
 {
@@ -39,5 +40,12 @@ class AuthService
     public function logout(User $user): void
     {
         $user->currentAccessToken()?->delete();
+    }
+
+    public function sendPasswordResetLink(string $email): void
+    {
+        Password::sendResetLink([
+            'email' => $email,
+        ]);
     }
 }

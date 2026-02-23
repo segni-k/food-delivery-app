@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Resources\UserResource;
@@ -40,5 +41,12 @@ class AuthController extends Controller
         $this->authService->logout($request->user());
 
         return $this->successResponse('Logged out successfully.');
+    }
+
+    public function forgotPassword(ForgotPasswordRequest $request)
+    {
+        $this->authService->sendPasswordResetLink((string) $request->validated('email'));
+
+        return $this->successResponse('If the email exists, a password reset link has been sent.');
     }
 }

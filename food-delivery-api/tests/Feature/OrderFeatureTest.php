@@ -34,12 +34,12 @@ class OrderFeatureTest extends TestCase
         Sanctum::actingAs($customer);
 
         $response = $this->postJson('/api/v1/orders', [
-            'restaurant_id' => $restaurant->id,
+            'restaurant_id' => $restaurant->public_id,
             'delivery_latitude' => $restaurant->latitude,
             'delivery_longitude' => $restaurant->longitude,
             'delivery_address' => 'Address',
             'items' => [
-                ['menu_item_id' => $item->id, 'quantity' => 1],
+                ['menu_item_id' => $item->public_id, 'quantity' => 1],
             ],
         ]);
 

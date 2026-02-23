@@ -33,7 +33,6 @@ const api = axios.create({
   baseURL: normalizedApiBaseUrl,
   timeout: Number(process.env.REACT_APP_API_TIMEOUT_MS || 15000),
   headers: {
-    'Content-Type': 'application/json',
     Accept: 'application/json',
   },
 });
@@ -51,6 +50,23 @@ api.interceptors.request.use(
   (config) => {
     useApiUiStore.getState().startRequest();
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const isFormData = typeof FormData !== 'undefined' && config?.data instanceof FormData;
+
+    if (isFormData) {
+      if (typeof config.headers?.set === 'function') {
+        config.headers.set('Content-Type', undefined);
+      } else if (config.headers) {
+        delete config.headers['Content-Type'];
+        delete config.headers['content-type'];
+      }
+    } else if (typeof config.headers?.set === 'function') {
+      config.headers.set('Content-Type', 'application/json');
+    } else {
+      config.headers = {
+        ...config.headers,
+        'Content-Type': 'application/json',
+      };
+    }
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

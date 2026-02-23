@@ -41,8 +41,17 @@ class PaymentController extends Controller
 
     public function chapaWebhook(Request $request)
     {
-        $txRef = (string) $request->input('tx_ref');
-        $payment = Payment::query()->where('gateway_transaction_ref', $txRef)->firstOrFail();
+        $this->assertValidWebhookSignature($request);
+
+        $txRef = $this->resolveTxReference($request);
+        if ($txRef === '') {
+            return response()->json(['status' => 'ignored', 'reason' => 'missing_tx_ref']);
+        }
+
+        $payment = Payment::query()->where('gateway_transaction_ref', $txRef)->first();
+        if (! $payment) {
+            return response()->json(['status' => 'ignored', 'reason' => 'payment_not_found']);
+        }
 
         $this->paymentService->verify($payment);
 
@@ -52,5 +61,40 @@ class PaymentController extends Controller
     public function store(CreatePaymentIntentRequest $request)
     {
         return $this->createIntent($request);
+    }
+
+    private function resolveTxReference(Request $request): string
+    {
+        return trim((string) (
+            $request->input('tx_ref')
+            ?? $request->input('data.tx_ref')
+            ?? $request->input('trx_ref')
+            ?? ''
+        ));
+    }
+
+    private function assertValidWebhookSignature(Request $request): void
+    {
+        $secret = trim((string) config('services.chapa.webhook_secret'));
+        if ($secret === '') {
+            return;
+        }
+
+        $rawSignature = (string) (
+            $request->header('Chapa-Signature')
+            ?? $request->header('x-chapa-signature')
+            ?? $request->header('x-webhook-signature')
+            ?? ''
+        );
+
+        $signature = trim(str_ireplace('sha256=', '', $rawSignature));
+        if ($signature === '') {
+            abort(401, 'Invalid webhook signature.');
+        }
+
+        $expected = hash_hmac('sha256', (string) $request->getContent(), $secret);
+        if (! hash_equals(strtolower($expected), strtolower($signature))) {
+            abort(401, 'Invalid webhook signature.');
+        }
     }
 }

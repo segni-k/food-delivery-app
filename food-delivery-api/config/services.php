@@ -37,6 +37,7 @@ return [
 
     'chapa' => [
         'secret_key' => env('CHAPA_SECRET_KEY'),
+        'webhook_secret' => env('CHAPA_WEBHOOK_SECRET'),
         'base_url' => env('CHAPA_BASE_URL', 'https://api.chapa.co/v1'),
         'frontend_url' => env('FRONTEND_APP_URL', 'http://127.0.0.1:3000'),
         'fallback_email' => env('CHAPA_FALLBACK_EMAIL', 'customer@harereats.com'),
