@@ -23,7 +23,7 @@ class OrderController extends Controller
         $user = $request->user();
 
         $orders = Order::query()
-            ->with(['restaurant', 'customer', 'items.menuItem', 'review', 'deliveryAssignments.deliveryPartner', 'latestPayment'])
+            ->with(['restaurant', 'deliveryAssignments.deliveryPartner', 'latestPayment'])
             ->when($user?->role?->value === 'customer', fn ($query) => $query->where('customer_id', $user->id))
             ->when($user?->role?->value === 'restaurant_owner', function ($query) use ($user): void {
                 $restaurantIds = Restaurant::query()->where('owner_id', $user->id)->pluck('id');

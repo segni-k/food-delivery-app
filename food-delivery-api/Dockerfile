@@ -14,7 +14,16 @@ RUN apt-get update \
         libfreetype6-dev \
         libwebp-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-    && docker-php-ext-install -j"$(nproc)" bcmath gd intl pdo pdo_mysql pdo_pgsql zip \
+    && docker-php-ext-install -j"$(nproc)" bcmath gd intl opcache pdo pdo_mysql pdo_pgsql zip \
+    && { \
+        echo 'opcache.enable=1'; \
+        echo 'opcache.enable_cli=1'; \
+        echo 'opcache.memory_consumption=192'; \
+        echo 'opcache.interned_strings_buffer=16'; \
+        echo 'opcache.max_accelerated_files=20000'; \
+        echo 'opcache.validate_timestamps=0'; \
+        echo 'opcache.save_comments=1'; \
+      } > /usr/local/etc/php/conf.d/opcache-recommended.ini \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

@@ -9,6 +9,7 @@ use App\Http\Resources\RestaurantResource;
 use App\Models\Restaurant;
 use App\Services\RestaurantService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class RestaurantController extends Controller
 {
@@ -18,9 +19,18 @@ class RestaurantController extends Controller
 
     public function index(Request $request)
     {
-        $restaurants = $this->restaurantService->listForApi((int) $request->integer('per_page', 15));
+        $cacheKey = 'api:v1:restaurants:index:' . md5((string) $request->getQueryString());
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return response()->json($cached);
+        }
 
-        return $this->successResponse('Restaurants fetched successfully.', RestaurantResource::collection($restaurants));
+        $restaurants = $this->restaurantService->listForApi((int) $request->integer('per_page', 15));
+        $response = $this->successResponse('Restaurants fetched successfully.', RestaurantResource::collection($restaurants));
+
+        Cache::put($cacheKey, $response->getData(true), now()->addSeconds(30));
+
+        return $response;
     }
 
     public function store(StoreRestaurantRequest $request)
@@ -35,12 +45,20 @@ class RestaurantController extends Controller
 
     public function show(Restaurant $restaurant)
     {
-        return $this->successResponse('Restaurant fetched successfully.', new RestaurantResource($restaurant->load([
+        $cacheKey = 'api:v1:restaurants:show:' . $restaurant->public_id;
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return response()->json($cached);
+        }
+
+        $response = $this->successResponse('Restaurant fetched successfully.', new RestaurantResource($restaurant->load([
             'owner',
             'featuredMenuItem',
-            'menuCategories.menuItems',
-            'menuItems',
         ])));
+
+        Cache::put($cacheKey, $response->getData(true), now()->addSeconds(30));
+
+        return $response;
     }
 
     public function update(UpdateRestaurantRequest $request, Restaurant $restaurant)

@@ -18,7 +18,10 @@ class RestaurantService
     public function listForApi(int $perPage = 15): LengthAwarePaginator
     {
         return Restaurant::query()
-            ->with(['owner', 'featuredMenuItem'])
+            ->with([
+                'owner:id,public_id,name',
+                'featuredMenuItem:id,public_id,restaurant_id,image_url',
+            ])
             ->latest()
             ->paginate($perPage);
     }

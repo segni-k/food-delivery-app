@@ -15,6 +15,7 @@ use App\Models\MenuItem;
 use App\Models\Restaurant;
 use App\Services\MenuService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class MenuController extends Controller
 {
@@ -24,6 +25,12 @@ class MenuController extends Controller
 
     public function index(Request $request)
     {
+        $cacheKey = 'api:v1:menu-items:index:' . md5((string) $request->getQueryString());
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return response()->json($cached);
+        }
+
         $items = $this->menuService->listForApi([
             'restaurant_id' => $request->query('restaurant_id'),
             'category_id' => $request->query('category_id'),
@@ -31,14 +38,26 @@ class MenuController extends Controller
             'per_page' => (int) $request->integer('per_page', 18),
         ]);
 
-        return $this->successResponse('Menu items fetched successfully.', MenuItemResource::collection($items));
+        $response = $this->successResponse('Menu items fetched successfully.', MenuItemResource::collection($items));
+        Cache::put($cacheKey, $response->getData(true), now()->addSeconds(30));
+
+        return $response;
     }
 
     public function show(MenuItem $menuItem)
     {
-        $item = $this->menuService->getItemForApi($menuItem);
+        $cacheKey = 'api:v1:menu-items:show:' . $menuItem->public_id;
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return response()->json($cached);
+        }
 
-        return $this->successResponse('Menu item fetched successfully.', new MenuItemResource($item));
+        $item = $this->menuService->getItemForApi($menuItem);
+        $response = $this->successResponse('Menu item fetched successfully.', new MenuItemResource($item));
+
+        Cache::put($cacheKey, $response->getData(true), now()->addSeconds(30));
+
+        return $response;
     }
 
     public function indexCategories(Restaurant $restaurant)
