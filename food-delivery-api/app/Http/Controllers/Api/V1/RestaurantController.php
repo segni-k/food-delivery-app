@@ -10,6 +10,7 @@ use App\Models\Restaurant;
 use App\Services\RestaurantService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Throwable;
 
 class RestaurantController extends Controller
 {
@@ -20,15 +21,23 @@ class RestaurantController extends Controller
     public function index(Request $request)
     {
         $cacheKey = 'api:v1:restaurants:index:' . md5((string) $request->getQueryString());
-        $cached = Cache::get($cacheKey);
-        if (is_array($cached)) {
-            return response()->json($cached);
+        if ($this->shouldUseEndpointCache()) {
+            $cached = $this->readCachedPayload($cacheKey);
+            if ($cached !== null) {
+                return response()->json($cached);
+            }
         }
 
-        $restaurants = $this->restaurantService->listForApi((int) $request->integer('per_page', 15));
+        $includeOwner = (bool) $request->boolean('include_owner', false);
+        $restaurants = $this->restaurantService->listForApi(
+            (int) $request->integer('per_page', 15),
+            $includeOwner
+        );
         $response = $this->successResponse('Restaurants fetched successfully.', RestaurantResource::collection($restaurants));
 
-        Cache::put($cacheKey, $response->getData(true), now()->addSeconds(30));
+        if ($this->shouldUseEndpointCache()) {
+            $this->writeCachedPayload($cacheKey, $response->getData(true), 30);
+        }
 
         return $response;
     }
@@ -46,17 +55,22 @@ class RestaurantController extends Controller
     public function show(Restaurant $restaurant)
     {
         $cacheKey = 'api:v1:restaurants:show:' . $restaurant->public_id;
-        $cached = Cache::get($cacheKey);
-        if (is_array($cached)) {
-            return response()->json($cached);
+        if ($this->shouldUseEndpointCache()) {
+            $cached = $this->readCachedPayload($cacheKey);
+            if ($cached !== null) {
+                return response()->json($cached);
+            }
         }
 
+        $includeOwner = (bool) request()->boolean('include_owner', false);
         $response = $this->successResponse('Restaurant fetched successfully.', new RestaurantResource($restaurant->load([
-            'owner',
             'featuredMenuItem',
+            ...($includeOwner ? ['owner'] : []),
         ])));
 
-        Cache::put($cacheKey, $response->getData(true), now()->addSeconds(30));
+        if ($this->shouldUseEndpointCache()) {
+            $this->writeCachedPayload($cacheKey, $response->getData(true), 30);
+        }
 
         return $response;
     }
@@ -71,5 +85,31 @@ class RestaurantController extends Controller
         $restaurant = $this->restaurantService->update($restaurant, $payload);
 
         return $this->successResponse('Restaurant updated successfully.', new RestaurantResource($restaurant));
+    }
+
+    private function readCachedPayload(string $key): ?array
+    {
+        try {
+            $cached = Cache::get($key);
+            return is_array($cached) ? $cached : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function writeCachedPayload(string $key, array $payload, int $seconds): void
+    {
+        try {
+            Cache::put($key, $payload, now()->addSeconds($seconds));
+        } catch (Throwable) {
+            // Cache is best-effort only. If cache backend fails, do not fail API responses.
+        }
+    }
+
+    private function shouldUseEndpointCache(): bool
+    {
+        $driver = (string) config('cache.default');
+
+        return in_array($driver, ['file', 'redis', 'memcached', 'array'], true);
     }
 }

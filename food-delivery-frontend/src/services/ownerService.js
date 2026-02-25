@@ -29,7 +29,12 @@ const toFormData = (payload = {}) => {
 
 export const ownerService = {
   async getRestaurants(params = {}) {
-    const { data } = await api.get('/restaurants', { params });
+    const { data } = await api.get('/restaurants', {
+      params: {
+        ...params,
+        include_owner: true,
+      },
+    });
     return normalizeCollectionResponse(data);
   },
 

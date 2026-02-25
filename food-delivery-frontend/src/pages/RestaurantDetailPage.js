@@ -18,6 +18,7 @@ const RestaurantDetailPage = () => {
   const [menuItems, setMenuItems] = useState([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isMenuLoading, setIsMenuLoading] = useState(true);
   const [error, setError] = useState('');
   const [zoneValidation, setZoneValidation] = useState(null);
   const [zoneError, setZoneError] = useState('');
@@ -29,19 +30,24 @@ const RestaurantDetailPage = () => {
 
     const fetchRestaurantData = async () => {
       setIsLoading(true);
+      setIsMenuLoading(true);
       setError('');
 
       try {
-        const [restaurantResult, menuItemsResult] = await Promise.all([
-          restaurantService.getRestaurantById(id),
-          restaurantService.getMenuItems({ restaurant_id: id, per_page: 120 }),
-        ]);
+        const restaurantResult = await restaurantService.getRestaurantById(id);
 
         if (!isActive) {
           return;
         }
 
         setRestaurant(restaurantResult);
+        setIsLoading(false);
+
+        const menuItemsResult = await restaurantService.getMenuItems({ restaurant_id: id, per_page: 120 });
+        if (!isActive) {
+          return;
+        }
+
         setMenuItems(menuItemsResult.rows || []);
       } catch (requestError) {
         if (!isActive) {
@@ -50,6 +56,7 @@ const RestaurantDetailPage = () => {
         setError(requestError?.message || 'Unable to load restaurant details.');
       } finally {
         if (isActive) {
+          setIsMenuLoading(false);
           setIsLoading(false);
         }
       }
@@ -263,6 +270,13 @@ const RestaurantDetailPage = () => {
       {isLoading ? (
         <div className="space-y-3">
           <div className="h-24 animate-pulse rounded-2xl bg-neutral-200 dark:bg-neutral-800" />
+          <div className="h-24 animate-pulse rounded-2xl bg-neutral-200 dark:bg-neutral-800" />
+          <div className="h-24 animate-pulse rounded-2xl bg-neutral-200 dark:bg-neutral-800" />
+        </div>
+      ) : null}
+
+      {!isLoading && isMenuLoading ? (
+        <div className="space-y-3">
           <div className="h-24 animate-pulse rounded-2xl bg-neutral-200 dark:bg-neutral-800" />
           <div className="h-24 animate-pulse rounded-2xl bg-neutral-200 dark:bg-neutral-800" />
         </div>

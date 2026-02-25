@@ -6,6 +6,7 @@ use App\Models\MenuCategory;
 use App\Models\MenuItem;
 use App\Models\Restaurant;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 
 class MenuService
 {
@@ -15,19 +16,34 @@ class MenuService
 
     public function listForApi(array $filters = []): LengthAwarePaginator
     {
-        $restaurantPublicId = $filters['restaurant_id'] ?? null;
-        $categoryPublicId = $filters['category_id'] ?? null;
+        $restaurantIdentifier = $filters['restaurant_id'] ?? null;
+        $categoryIdentifier = $filters['category_id'] ?? null;
         $search = trim((string) ($filters['search'] ?? ''));
         $perPage = max(1, min(50, (int) ($filters['per_page'] ?? 18)));
+        $restaurantId = $this->resolveRestaurantId($restaurantIdentifier);
+        $categoryId = $this->resolveCategoryId($categoryIdentifier, $restaurantId);
 
         return MenuItem::query()
-            ->with(['category', 'restaurant'])
-            ->when($restaurantPublicId, function ($query, $restaurantPublicId): void {
-                $query->whereHas('restaurant', fn ($restaurantQuery) => $restaurantQuery->where('public_id', $restaurantPublicId));
-            })
-            ->when($categoryPublicId, function ($query, $categoryPublicId): void {
-                $query->whereHas('category', fn ($categoryQuery) => $categoryQuery->where('public_id', $categoryPublicId));
-            })
+            ->select([
+                'id',
+                'public_id',
+                'restaurant_id',
+                'menu_category_id',
+                'name',
+                'description',
+                'price',
+                'image_url',
+                'is_available',
+                'created_at',
+            ])
+            ->with([
+                'category:id,public_id,restaurant_id,name,description,sort_order',
+                'restaurant:id,public_id,name,image_url,banner_image_url',
+            ])
+            ->when($restaurantIdentifier !== null && $restaurantId === null, fn (Builder $query): Builder => $query->whereRaw('1 = 0'))
+            ->when($restaurantId !== null, fn (Builder $query): Builder => $query->where('restaurant_id', $restaurantId))
+            ->when($categoryIdentifier !== null && $categoryId === null, fn (Builder $query): Builder => $query->whereRaw('1 = 0'))
+            ->when($categoryId !== null, fn (Builder $query): Builder => $query->where('menu_category_id', $categoryId))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($innerQuery) use ($search): void {
                     $innerQuery
@@ -37,6 +53,35 @@ class MenuService
             })
             ->latest()
             ->paginate($perPage);
+    }
+
+    private function resolveRestaurantId(mixed $identifier): ?int
+    {
+        $value = trim((string) $identifier);
+        if ($value === '') {
+            return null;
+        }
+
+        return Restaurant::query()
+            ->where('public_id', $value)
+            ->orWhere('id', $value)
+            ->value('id');
+    }
+
+    private function resolveCategoryId(mixed $identifier, ?int $restaurantId): ?int
+    {
+        $value = trim((string) $identifier);
+        if ($value === '') {
+            return null;
+        }
+
+        return MenuCategory::query()
+            ->when($restaurantId !== null, fn (Builder $query): Builder => $query->where('restaurant_id', $restaurantId))
+            ->where(function (Builder $query) use ($value): void {
+                $query->where('public_id', $value)
+                    ->orWhere('id', $value);
+            })
+            ->value('id');
     }
 
     public function getItemForApi(MenuItem $item): MenuItem

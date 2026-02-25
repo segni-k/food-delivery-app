@@ -16,6 +16,7 @@ use App\Models\Restaurant;
 use App\Services\MenuService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Throwable;
 
 class MenuController extends Controller
 {
@@ -26,9 +27,11 @@ class MenuController extends Controller
     public function index(Request $request)
     {
         $cacheKey = 'api:v1:menu-items:index:' . md5((string) $request->getQueryString());
-        $cached = Cache::get($cacheKey);
-        if (is_array($cached)) {
-            return response()->json($cached);
+        if ($this->shouldUseEndpointCache()) {
+            $cached = $this->readCachedPayload($cacheKey);
+            if ($cached !== null) {
+                return response()->json($cached);
+            }
         }
 
         $items = $this->menuService->listForApi([
@@ -39,7 +42,9 @@ class MenuController extends Controller
         ]);
 
         $response = $this->successResponse('Menu items fetched successfully.', MenuItemResource::collection($items));
-        Cache::put($cacheKey, $response->getData(true), now()->addSeconds(30));
+        if ($this->shouldUseEndpointCache()) {
+            $this->writeCachedPayload($cacheKey, $response->getData(true), 30);
+        }
 
         return $response;
     }
@@ -47,15 +52,19 @@ class MenuController extends Controller
     public function show(MenuItem $menuItem)
     {
         $cacheKey = 'api:v1:menu-items:show:' . $menuItem->public_id;
-        $cached = Cache::get($cacheKey);
-        if (is_array($cached)) {
-            return response()->json($cached);
+        if ($this->shouldUseEndpointCache()) {
+            $cached = $this->readCachedPayload($cacheKey);
+            if ($cached !== null) {
+                return response()->json($cached);
+            }
         }
 
         $item = $this->menuService->getItemForApi($menuItem);
         $response = $this->successResponse('Menu item fetched successfully.', new MenuItemResource($item));
 
-        Cache::put($cacheKey, $response->getData(true), now()->addSeconds(30));
+        if ($this->shouldUseEndpointCache()) {
+            $this->writeCachedPayload($cacheKey, $response->getData(true), 30);
+        }
 
         return $response;
     }
@@ -186,5 +195,31 @@ class MenuController extends Controller
         if ($item->restaurant_id !== $restaurant->id) {
             abort(404, 'Menu item not found for this restaurant.');
         }
+    }
+
+    private function readCachedPayload(string $key): ?array
+    {
+        try {
+            $cached = Cache::get($key);
+            return is_array($cached) ? $cached : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function writeCachedPayload(string $key, array $payload, int $seconds): void
+    {
+        try {
+            Cache::put($key, $payload, now()->addSeconds($seconds));
+        } catch (Throwable) {
+            // Cache is best-effort only. If cache backend fails, do not fail API responses.
+        }
+    }
+
+    private function shouldUseEndpointCache(): bool
+    {
+        $driver = (string) config('cache.default');
+
+        return in_array($driver, ['file', 'redis', 'memcached', 'array'], true);
     }
 }
