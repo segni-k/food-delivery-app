@@ -26,6 +26,8 @@ const isSamePayment = (left, right) => {
     left.id === right.id &&
     left.status === right.status &&
     left.checkout_url === right.checkout_url &&
+    left.receipt_url === right.receipt_url &&
+    left.gateway_reference === right.gateway_reference &&
     left.gateway_transaction_ref === right.gateway_transaction_ref
   );
 };

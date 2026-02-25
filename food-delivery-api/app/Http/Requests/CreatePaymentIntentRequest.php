@@ -16,6 +16,7 @@ class CreatePaymentIntentRequest extends FormRequest
         return [
             'order_id' => ['required', 'string'],
             'return_origin' => ['nullable', 'url', 'max:255'],
+            'force_reinitialize' => ['nullable', 'boolean'],
         ];
     }
 }

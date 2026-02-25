@@ -12,7 +12,7 @@ const statusThemeMap = {
 };
 
 const statusMessage = {
-  paid: 'Paid.',
+  paid: 'Paid. Receipt is ready.',
   failed: 'Not paid. Payment failed. Please retry.',
   refunded: 'Not paid. Payment was refunded.',
   pending: 'Not paid yet.',
@@ -92,6 +92,7 @@ const ChapaPaymentIntegration = ({
       const createdPayment = await orderService.createPayment({
         order_id: orderId,
         return_origin: window.location.origin,
+        force_reinitialize: Boolean(payment?.id),
       });
       upsertPaymentState(createdPayment);
       if (createdPayment?.checkout_url) {
@@ -104,7 +105,7 @@ const ChapaPaymentIntegration = ({
     } finally {
       setIsInitializing(false);
     }
-  }, [orderId, upsertPaymentState]);
+  }, [orderId, payment?.id, upsertPaymentState]);
 
   const openCheckout = useCallback(() => {
     if (!payment?.checkout_url) {
@@ -113,6 +114,14 @@ const ChapaPaymentIntegration = ({
 
     window.location.assign(payment.checkout_url);
   }, [payment?.checkout_url]);
+
+  const openReceipt = useCallback(() => {
+    if (!payment?.receipt_url) {
+      return;
+    }
+
+    window.open(payment.receipt_url, '_blank', 'noopener,noreferrer');
+  }, [payment?.receipt_url]);
 
   useEffect(() => {
     if (initialPayment) {
@@ -162,6 +171,9 @@ const ChapaPaymentIntegration = ({
       {payment?.gateway_transaction_ref ? (
         <p className="text-xs text-neutral-500 dark:text-neutral-400">Transaction ref: {payment.gateway_transaction_ref}</p>
       ) : null}
+      {payment?.receipt_url ? (
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">Receipt: {payment.receipt_url}</p>
+      ) : null}
       <p className="text-xs text-neutral-500 dark:text-neutral-400">Gateway state: {readableStatus}</p>
       <p className="text-xs text-neutral-500 dark:text-neutral-400">Confirmation mode: {connectionMode}</p>
 
@@ -194,6 +206,14 @@ const ChapaPaymentIntegration = ({
           className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
         >
           {isVerifying ? 'Checking...' : 'Check status'}
+        </button>
+        <button
+          type="button"
+          onClick={openReceipt}
+          disabled={!payment?.receipt_url || !isPaid}
+          className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
+        >
+          Open receipt
         </button>
       </div>
     </section>

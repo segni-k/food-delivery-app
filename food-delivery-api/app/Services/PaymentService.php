@@ -17,9 +17,12 @@ class PaymentService
     {
     }
 
-    public function createIntent(Order $order, ?string $returnOrigin = null): Payment
+    public function createIntent(Order $order, ?string $returnOrigin = null, bool $forceReinitialize = false): Payment
     {
+        $order->loadMissing(['customer']);
+
         $payment = $this->resolveExistingPayment($order);
+        $createdNewPayment = false;
         if (! $payment) {
             $payment = Payment::query()->create([
                 'order_id' => $order->id,
@@ -29,10 +32,25 @@ class PaymentService
                 'currency' => 'ETB',
                 'status' => PaymentStatusEnum::PENDING,
             ]);
+            $createdNewPayment = true;
         }
 
-        if ($payment->status === PaymentStatusEnum::PAID || $this->hasCheckoutUrl($payment)) {
+        if ($payment->status === PaymentStatusEnum::PAID) {
             return $payment->refresh();
+        }
+
+        $shouldReuseCheckout = ! $forceReinitialize && $this->hasReusableCheckoutUrl($payment);
+        if ($shouldReuseCheckout) {
+            return $payment->refresh();
+        }
+
+        if (! $createdNewPayment && $payment->status === PaymentStatusEnum::PENDING) {
+            $payment->update([
+                'gateway_transaction_ref' => $this->generateTransactionReference(),
+                'gateway_reference' => null,
+                'gateway_payload' => null,
+            ]);
+            $payment->refresh();
         }
 
         $customerEmail = (string) ($order->customer->email ?? '');
@@ -53,10 +71,15 @@ class PaymentService
                     'currency' => $payment->currency,
                     'email' => $customerEmail,
                     'first_name' => $firstName,
-                    'callback_url' => config('app.url') . '/api/v1/payments/webhook/chapa',
+                    'callback_url' => $this->resolveCallbackUrl(),
                     'return_url' => $frontendBaseUrl . '/orders/' . $order->public_id . '/confirmation?from=chapa',
                     'customization' => [
                         'title' => 'HarerEats Order',
+                        'description' => 'Food delivery checkout',
+                    ],
+                    'meta' => [
+                        'hide_receipt' => false,
+                        'order_public_id' => $order->public_id,
                     ],
                 ]
             );
@@ -71,7 +94,7 @@ class PaymentService
         }
 
         $payment->update([
-            'gateway_reference' => $intent['tx_ref'] ?? $payment->gateway_transaction_ref,
+            'gateway_reference' => $intent['gateway_reference'] ?? $payment->gateway_reference,
             'gateway_payload' => $intent['raw'] ?? null,
         ]);
 
@@ -159,6 +182,23 @@ class PaymentService
         return is_string($checkoutUrl) && trim($checkoutUrl) !== '';
     }
 
+    private function hasReusableCheckoutUrl(Payment $payment): bool
+    {
+        if (! $this->hasCheckoutUrl($payment)) {
+            return false;
+        }
+
+        $ttlMinutes = (int) config('services.chapa.checkout_url_ttl_minutes', 30);
+        if ($ttlMinutes <= 0) {
+            return true;
+        }
+
+        $validAfter = now()->subMinutes($ttlMinutes);
+        $referenceTime = $payment->updated_at ?? $payment->created_at;
+
+        return $referenceTime !== null && $referenceTime->greaterThanOrEqualTo($validAfter);
+    }
+
     private function resolveFrontendBaseUrl(?string $returnOrigin): string
     {
         $configured = rtrim((string) config('services.chapa.frontend_url'), '/');
@@ -183,6 +223,16 @@ class PaymentService
         return "{$scheme}://{$host}{$port}";
     }
 
+    private function resolveCallbackUrl(): string
+    {
+        $configured = trim((string) config('services.chapa.callback_url'));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        return rtrim((string) config('app.url'), '/') . '/api/v1/payments/callback/chapa';
+    }
+
     public function verify(Payment $payment): Payment
     {
         $wasPaid = $payment->status === PaymentStatusEnum::PAID;
@@ -198,6 +248,11 @@ class PaymentService
                     : 'Unable to verify payment with gateway right now. Please try again shortly.'
             );
         }
+
+        if (! $this->isVerificationConsistent($payment, $verification)) {
+            abort(422, 'Payment verification data mismatch detected. Please contact support.');
+        }
+
         $gatewayStatus = strtolower((string) (
             data_get($verification, 'raw.data.status')
             ?? $verification['status']
@@ -216,6 +271,7 @@ class PaymentService
             'paid_at' => $status === PaymentStatusEnum::PAID
                 ? ($payment->paid_at ?? now())
                 : $payment->paid_at,
+            'gateway_reference' => $verification['gateway_reference'] ?? $payment->gateway_reference,
             'gateway_payload' => $verification['raw'] ?? null,
         ]);
 
@@ -224,6 +280,73 @@ class PaymentService
         }
 
         return $payment->refresh();
+    }
+
+    private function isVerificationConsistent(Payment $payment, array $verification): bool
+    {
+        $txRef = $this->extractVerifiedTxRef($verification);
+        if ($txRef !== null && $txRef !== $payment->gateway_transaction_ref) {
+            return false;
+        }
+
+        $currency = $this->extractVerifiedCurrency($verification);
+        if ($currency !== null && strtoupper($currency) !== strtoupper((string) $payment->currency)) {
+            return false;
+        }
+
+        $amount = $this->extractVerifiedAmount($verification);
+        if ($amount !== null) {
+            $localAmount = round((float) $payment->amount, 2);
+            if (abs($amount - $localAmount) > 0.01) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function extractVerifiedTxRef(array $verification): ?string
+    {
+        $value = data_get($verification, 'raw.data.tx_ref')
+            ?? data_get($verification, 'raw.data.transaction_ref')
+            ?? data_get($verification, 'raw.data.order_ref')
+            ?? null;
+
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    private function extractVerifiedCurrency(array $verification): ?string
+    {
+        $value = data_get($verification, 'raw.data.currency')
+            ?? data_get($verification, 'raw.data.currency_code')
+            ?? null;
+
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    private function extractVerifiedAmount(array $verification): ?float
+    {
+        $value = data_get($verification, 'raw.data.amount')
+            ?? data_get($verification, 'raw.data.amount_paid')
+            ?? null;
+
+        if (! is_scalar($value) || ! is_numeric((string) $value)) {
+            return null;
+        }
+
+        return round((float) $value, 2);
     }
 
     public function refund(Payment $payment, ?string $reason = null): Payment

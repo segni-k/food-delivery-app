@@ -17,6 +17,7 @@ Route::prefix('v1')->group(function (): void {
     Route::post('auth/login', [AuthController::class, 'login']);
     Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('payments/webhook/chapa', [PaymentController::class, 'chapaWebhook']);
+    Route::match(['get', 'post'], 'payments/callback/chapa', [PaymentController::class, 'chapaCallback']);
     Route::get('restaurants', [RestaurantController::class, 'index']);
     Route::get('restaurants/{restaurant}', [RestaurantController::class, 'show']);
     Route::get('menu-items', [MenuController::class, 'index']);

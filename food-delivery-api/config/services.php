@@ -38,7 +38,11 @@ return [
     'chapa' => [
         'secret_key' => env('CHAPA_SECRET_KEY'),
         'webhook_secret' => env('CHAPA_WEBHOOK_SECRET'),
+        'require_webhook_signature' => env('CHAPA_REQUIRE_WEBHOOK_SIGNATURE'),
         'base_url' => env('CHAPA_BASE_URL', 'https://api.chapa.co/v1'),
+        'callback_url' => env('CHAPA_CALLBACK_URL'),
+        'receipt_base_url' => env('CHAPA_RECEIPT_BASE_URL', 'https://chapa.link/payment-receipt'),
+        'checkout_url_ttl_minutes' => env('CHAPA_CHECKOUT_URL_TTL_MINUTES', 30),
         'frontend_url' => env('FRONTEND_APP_URL', 'http://127.0.0.1:3000'),
         'fallback_email' => env('CHAPA_FALLBACK_EMAIL', 'customer@harereats.com'),
         'fallback_first_name' => env('CHAPA_FALLBACK_FIRST_NAME', 'Customer'),

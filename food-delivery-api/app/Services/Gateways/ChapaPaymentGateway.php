@@ -30,8 +30,20 @@ class ChapaPaymentGateway implements PaymentGatewayInterface
             );
         }
 
+        if (! is_array($response)) {
+            throw new RuntimeException('Payment gateway returned an invalid initialization response.');
+        }
+
+        if (strtolower((string) ($response['status'] ?? '')) !== 'success') {
+            $gatewayMessage = $this->extractGatewayMessage($response);
+            throw new RuntimeException(
+                $gatewayMessage !== '' ? $gatewayMessage : 'Payment gateway rejected initialization request.'
+            );
+        }
+
         return [
             'checkout_url' => $response['data']['checkout_url'] ?? null,
+            'gateway_reference' => $this->extractGatewayReference($response),
             'tx_ref' => $payload['tx_ref'] ?? null,
             'raw' => $response,
         ];
@@ -58,10 +70,39 @@ class ChapaPaymentGateway implements PaymentGatewayInterface
             );
         }
 
+        if (! is_array($response)) {
+            throw new RuntimeException('Payment gateway returned an invalid verification response.');
+        }
+
+        if (strtolower((string) ($response['status'] ?? '')) !== 'success') {
+            $gatewayMessage = $this->extractGatewayMessage($response);
+            throw new RuntimeException(
+                $gatewayMessage !== '' ? $gatewayMessage : 'Payment gateway rejected verification request.'
+            );
+        }
+
         return [
             'status' => $response['data']['status'] ?? null,
+            'gateway_reference' => $this->extractGatewayReference($response),
             'raw' => $response,
         ];
+    }
+
+    private function extractGatewayReference(array $responseBody): ?string
+    {
+        $value = $responseBody['data']['reference']
+            ?? $responseBody['data']['ref_id']
+            ?? $responseBody['data']['trx_ref']
+            ?? $responseBody['data']['transaction_id']
+            ?? null;
+
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+
+        return $normalized !== '' ? $normalized : null;
     }
 
     private function extractGatewayMessage(mixed $responseBody): string

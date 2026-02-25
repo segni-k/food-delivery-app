@@ -87,6 +87,68 @@ class PaymentFeatureTest extends TestCase
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
     }
 
+    public function test_payment_intent_can_force_reinitialize_to_create_fresh_checkout_session(): void
+    {
+        $tracker = new class
+        {
+            public array $refs = [];
+        };
+
+        $this->app->bind(PaymentGatewayInterface::class, fn () => new class($tracker) implements PaymentGatewayInterface {
+            public function __construct(private readonly object $tracker)
+            {
+            }
+
+            public function createIntent(array $payload): array
+            {
+                $this->tracker->refs[] = (string) $payload['tx_ref'];
+
+                return [
+                    'tx_ref' => $payload['tx_ref'],
+                    'checkout_url' => 'https://checkout.test/' . $payload['tx_ref'],
+                    'raw' => [
+                        'status' => 'success',
+                        'data' => [
+                            'checkout_url' => 'https://checkout.test/' . $payload['tx_ref'],
+                        ],
+                    ],
+                ];
+            }
+
+            public function verify(string $transactionRef): array
+            {
+                return [
+                    'status' => 'success',
+                    'raw' => [
+                        'status' => 'success',
+                        'data' => [
+                            'status' => 'success',
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $customer = User::factory()->create(['role' => UserRoleEnum::CUSTOMER]);
+        $order = Order::factory()->create(['customer_id' => $customer->id]);
+
+        Sanctum::actingAs($customer);
+
+        $first = $this->postJson('/api/v1/payments/intents', [
+            'order_id' => $order->public_id,
+        ]);
+        $second = $this->postJson('/api/v1/payments/intents', [
+            'order_id' => $order->public_id,
+            'force_reinitialize' => true,
+        ]);
+
+        $first->assertOk()->assertJsonPath('success', true);
+        $second->assertOk()->assertJsonPath('success', true);
+        $this->assertCount(2, $tracker->refs);
+        $this->assertNotSame($tracker->refs[0], $tracker->refs[1]);
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+    }
+
     public function test_payment_intent_retries_with_new_transaction_reference_when_gateway_rejects_reused_reference(): void
     {
         $tracker = new class
@@ -196,5 +258,50 @@ class PaymentFeatureTest extends TestCase
             ]);
 
         $response->assertUnauthorized();
+    }
+
+    public function test_chapa_webhook_accepts_chapa_signature_mode(): void
+    {
+        $this->bindFakeGateway();
+        config()->set('services.chapa.webhook_secret', 'test-webhook-secret');
+
+        $customer = User::factory()->create(['role' => UserRoleEnum::CUSTOMER]);
+        $order = Order::factory()->create(['customer_id' => $customer->id]);
+        Payment::factory()->create([
+            'order_id' => $order->id,
+            'status' => 'pending',
+            'gateway_transaction_ref' => 'FD-WEBHOOK-REF-3',
+        ]);
+
+        $signature = hash_hmac('sha256', 'test-webhook-secret', 'test-webhook-secret');
+
+        $response = $this
+            ->withHeaders(['chapa-signature' => $signature])
+            ->postJson('/api/v1/payments/webhook/chapa', [
+                'tx_ref' => 'FD-WEBHOOK-REF-3',
+            ]);
+
+        $response->assertOk()->assertJsonPath('status', 'ok');
+    }
+
+    public function test_chapa_callback_verifies_payment_with_query_reference(): void
+    {
+        $this->bindFakeGateway();
+
+        $customer = User::factory()->create(['role' => UserRoleEnum::CUSTOMER]);
+        $order = Order::factory()->create(['customer_id' => $customer->id]);
+        $payment = Payment::factory()->create([
+            'order_id' => $order->id,
+            'status' => 'pending',
+            'gateway_transaction_ref' => 'FD-CALLBACK-REF-1',
+        ]);
+
+        $response = $this->getJson('/api/v1/payments/callback/chapa?tx_ref=' . $payment->gateway_transaction_ref);
+
+        $response->assertOk()->assertJsonPath('status', 'ok');
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'status' => 'paid',
+        ]);
     }
 }
